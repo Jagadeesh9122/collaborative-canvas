@@ -42,47 +42,54 @@ export default function App() {
 
   /* ================= SOCKET SETUP ================= */
 
-  useEffect(() => {
+useEffect(() => {
+  const handleConnect = () => {
     socket.emit("join-room", "default");
+    console.log("Connected:", socket.id);
+  };
 
-    socket.on("connect", () => {
-      console.log("Connected:", socket.id);
-    });
+  const handleCursor = ({
+    userId,
+    x,
+    y,
+  }: {
+    userId: string;
+    x: number;
+    y: number;
+  }) => {
+    setCursors((prev) => ({ ...prev, [userId]: { x, y } }));
+  };
 
-    socket.on(
-      "cursor-move",
-      ({ userId, x, y }: { userId: string; x: number; y: number }) => {
-        setCursors((prev) => ({ ...prev, [userId]: { x, y } }));
-      }
-    );
+  const handleStroke = (seg: StrokeSegment) => {
+    drawRemoteSegment(seg);
+  };
 
-    socket.on("stroke-segment", (seg: StrokeSegment) => {
-      drawRemoteSegment(seg);
-    });
+  const handleSync = (segments: StrokeSegment[]) => {
+    clearCanvas();
+    redrawFromSegments(segments);
+  };
 
-    socket.on("canvas-sync", (segments: StrokeSegment[]) => {
-      redrawFromSegments(segments);
-    });
+  const handleBatch = (segments: StrokeSegment[]) => {
+    segments.forEach(drawRemoteSegment);
+  };
 
-    socket.on("room-history", (segments: StrokeSegment[]) => {
-      redrawFromSegments(segments);
-    });
+  socket.on("connect", handleConnect);
+  socket.on("cursor-move", handleCursor);
+  socket.on("stroke-segment", handleStroke);
+  socket.on("canvas-sync", handleSync);
+  socket.on("room-history", handleSync);
+  socket.on("stroke-batch", handleBatch);
 
-    socket.on("stroke-batch", (segments: StrokeSegment[]) => {
-  segments.forEach(drawRemoteSegment);
-});
+  return () => {
+    socket.off("connect", handleConnect);
+    socket.off("cursor-move", handleCursor);
+    socket.off("stroke-segment", handleStroke);
+    socket.off("canvas-sync", handleSync);
+    socket.off("room-history", handleSync);
+    socket.off("stroke-batch", handleBatch);
+  };
+}, []);
 
-
-    return () => {
-      socket.off("connect");
-      socket.off("cursor-move");
-      socket.off("stroke-segment");
-      socket.off("canvas-sync");
-      socket.off("room-history");
-      socket.off("stroke-batch");
-
-    };
-  }, []);
 
   /* ================= CANVAS SETUP ================= */
 
@@ -248,6 +255,16 @@ export default function App() {
   function undo() {
     socket.emit("undo", "default");
   }
+
+  function clearCanvas() {
+  const canvas = canvasRef.current;
+  const ctx = ctxRef.current;
+
+  if (!canvas || !ctx) return;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
 
   /* ================= UI ================= */
     /* ================= UI HELPERS ================= */
